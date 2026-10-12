@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getClientAuth } from "../../lib/firebase/client";
 
 const IDLE_TIMEOUT = Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES || 30) * 60 * 1000;
+const PRO_TEST_EMAIL = "sebastiancharpentier@gmail.com";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -16,7 +17,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     const clientAuth = getClientAuth();
     const unsubscribe = onAuthStateChanged(clientAuth, (nextUser) => {
       const allowedEmail = process.env.NEXT_PUBLIC_ALLOWED_ADMIN_EMAIL?.trim().toLowerCase();
-      const validUser = nextUser && (!allowedEmail || nextUser.email?.toLowerCase() === allowedEmail) ? nextUser : null;
+      const normalizedEmail = nextUser?.email?.trim().toLowerCase();
+      const validUser = nextUser && (normalizedEmail === PRO_TEST_EMAIL || !allowedEmail || normalizedEmail === allowedEmail) ? nextUser : null;
 
       if (nextUser && !validUser) void signOut(clientAuth);
       setUser(validUser);
