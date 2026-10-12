@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
-import Underline from "@tiptap/extension-underline";
-import Link from "@tiptap/extension-link";
 import { getClientAuth } from "../../lib/firebase/client";
 import { STUDIO_ID } from "../../lib/activities/activity.model";
 import { listCases } from "../../lib/firebase/domain-repositories";
@@ -77,7 +75,7 @@ export function JurisprudenceWorkspace() {
   const caseIdRef = useRef(caseId); caseIdRef.current = caseId;
 
   const editor = useEditor({
-    extensions: [StarterKit, Highlight.configure({ multicolor: false }), Underline, Link.configure({ openOnClick: false }), LegalCitationNode],
+    extensions: [StarterKit.configure({ link: { openOnClick: false } }), Highlight.configure({ multicolor: false }), LegalCitationNode],
     content: emptyContent,
     immediatelyRender: false,
     editorProps: { attributes: { class: "legal-editor-content", "aria-label": "Editor de escrito jurídico" } },
