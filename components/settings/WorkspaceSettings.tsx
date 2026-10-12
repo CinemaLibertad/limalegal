@@ -4,10 +4,10 @@ import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, 
 import GoogleDriveStorageCard from "@/components/settings/GoogleDriveStorageCard";
 import OneDriveStorageCard from "@/components/settings/OneDriveStorageCard";
 import { getClientAuth } from "@/lib/firebase/client";
+import { listTeamMembers, saveTeamMember, type AuthorizedMember } from "@/lib/settings/team.repository";
+import { createMobileEnrollment, listMobileAssignments, type MobileAssignment, type MobileEnrollmentQr } from "@/lib/settings/mobile.repository";
 
 const settingsKey = (uid: string, section: string) => `lima-legal:workspace-settings:${uid}:${section}`;
-const teamMembersKey = (uid: string) => `lima-legal:workspace-settings:${uid}:team-members`;
-type AuthorizedMember = { id: string; name: string; email: string; role: string; permission: string };
 
 const sections = [
   ["identity", "Identidad del estudio"],
@@ -93,7 +93,7 @@ function ProfessionalSection() {
   </div>;
 }
 
-function TeamSection({ members }: { members: AuthorizedMember[] }) {
+function TeamSection({ members, loading }: { members: AuthorizedMember[]; loading: boolean }) {
   return <div className="settings-card-grid">
     <Card title="Personas autorizadas" description="Definí quién puede acceder al espacio de trabajo y qué tareas puede realizar.">
       <div className="settings-fields-grid">
@@ -105,11 +105,11 @@ function TeamSection({ members }: { members: AuthorizedMember[] }) {
       <p className="settings-empty-note">Completá los datos y elegí “Guardar y agregar” para registrar a la persona.</p>
     </Card>
     <Card title="Personas asignadas" description="Integrantes registrados para este espacio de trabajo.">
-      {members.length === 0 ? <p className="settings-empty-note">Todavía no hay personas asignadas.</p> : <div className="settings-member-list">{members.map((member) => <article className="settings-member-row" key={member.id}>
+      {loading ? <p className="settings-empty-note">Cargando equipo desde Firebase…</p> : members.length === 0 ? <p className="settings-empty-note">Todavía no hay personas asignadas.</p> : <div className="settings-member-list">{members.map((member) => <article className="settings-member-row" key={member.id}>
         <div><strong>{member.name}</strong><span>{member.email}</span></div>
         <div className="settings-member-permissions"><span>{member.role}</span><span>{member.permission}</span></div>
       </article>)}</div>}
-      <p className="settings-member-footnote">La lista se guarda en este navegador; la habilitación efectiva de acceso requiere integrar la asignación de permisos en Firebase.</p>
+      <p className="settings-member-footnote">Integrantes guardados en Firebase para este espacio de trabajo.</p>
     </Card>
   </div>;
 }
@@ -136,17 +136,22 @@ function DocumentsSection() {
   </div>;
 }
 
-function DevicesSection() {
+function DevicesSection({ members, assignments, enrollmentQr, loading }: { members: AuthorizedMember[]; assignments: MobileAssignment[]; enrollmentQr: MobileEnrollmentQr | null; loading: boolean }) {
   return <div className="settings-card-grid">
     <Card title="Vinculación de la aplicación móvil" description="Cada persona del estudio tendrá su propia vinculación para registrar actividad desde el teléfono.">
-      <div className="settings-device-empty">
-        <span className="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>
-        <h3>Vinculación por QR</h3>
-        <p>La activación individual estará disponible cuando integremos la aplicación móvil.</p>
+      <div className="settings-fields-grid">
+        <label className="settings-field is-wide"><span>Integrante previamente agregado al equipo</span><select name="Integrante de la aplicación móvil" defaultValue="" required disabled={members.length === 0}><option value="" disabled>Seleccionar persona del equipo</option>{members.map((member) => <option key={member.id} value={member.email}>{member.name} · {member.email}</option>)}</select></label>
+        <label className="settings-field is-wide"><span>Permiso de la aplicación</span><select name="Permiso de la aplicación móvil" defaultValue="Consulta" required><option>Consulta</option><option>Carga de actividad</option></select></label>
       </div>
+      <p className="settings-empty-note">Al generar el QR, la persona lo escanea y después inicia sesión con Google. Solo se activa si su correo coincide con el integrante seleccionado.</p>
+      {members.length === 0 && <p className="settings-empty-note">Primero agregá y guardá a la persona en “Equipo y permisos”.</p>}
     </Card>
-    <Card title="Dispositivos vinculados" description="Los dispositivos aparecerán aquí una vez que se complete su activación.">
-      <p className="settings-empty-note">No hay dispositivos mostrados.</p>
+    <Card title="Accesos y dispositivos" description="Asignaciones móviles de integrantes del estudio y sus dispositivos activos.">
+      {enrollmentQr && <div className="settings-mobile-qr"><img src={enrollmentQr.qrDataUrl} alt={`QR de vinculación para ${enrollmentQr.email}`} /><div><strong>QR listo para escanear</strong><span>{enrollmentQr.email}</span><span>Permiso: {enrollmentQr.permission}</span><span>ID de aplicación: {enrollmentQr.appId}</span><small>Vence a las {new Date(enrollmentQr.expiresAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}. Es de un solo uso.</small></div></div>}
+      {loading ? <p className="settings-empty-note">Cargando accesos desde Firebase…</p> : assignments.length === 0 ? <p className="settings-empty-note">Todavía no hay integrantes habilitados para la aplicación.</p> : <div className="settings-member-list">{assignments.map((assignment) => <article className="settings-member-row" key={assignment.memberId}>
+        <div><strong>{assignment.name}</strong><span>{assignment.email}</span><span>ID de aplicación: {assignment.appId}</span></div>
+        <div className="settings-member-permissions"><span>{assignment.permission}</span><span>{assignment.devices.length ? `${assignment.devices.length} dispositivo(s) vinculado(s)` : "QR generado; esperando vinculación"}</span>{assignment.devices.map((device) => <small key={device.id}>{device.name}</small>)}</div>
+      </article>)}</div>}
     </Card>
   </div>;
 }
@@ -186,7 +191,9 @@ function StorageSection() {
   </div>;
 }
 
-const content: Record<string, (props: { members: AuthorizedMember[] }) => ReactNode> = {
+type WorkspaceSectionProps = { members: AuthorizedMember[]; loading: boolean; assignments: MobileAssignment[]; enrollmentQr: MobileEnrollmentQr | null };
+
+const content: Record<string, (props: WorkspaceSectionProps) => ReactNode> = {
   identity: IdentitySection,
   professionals: ProfessionalSection,
   team: TeamSection,
@@ -201,19 +208,32 @@ export default function WorkspaceSettings() {
   const [active, setActive] = useState<string>("identity");
   const [saveMessage, setSaveMessage] = useState("");
   const [members, setMembers] = useState<AuthorizedMember[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [mobileAssignments, setMobileAssignments] = useState<MobileAssignment[]>([]);
+  const [mobileLoading, setMobileLoading] = useState(false);
+  const [mobileEnrollmentQr, setMobileEnrollmentQr] = useState<MobileEnrollmentQr | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const ActiveSection = content[active];
   useEffect(() => {
     setSaveMessage("");
     const uid = getClientAuth().currentUser?.uid;
     if (!uid) return;
-    if (active === "team") {
-      try {
-        setMembers(JSON.parse(localStorage.getItem(teamMembersKey(uid)) ?? "[]") as AuthorizedMember[]);
-      } catch {
-        setMembers([]);
-      }
+    if (active === "team" || active === "devices") {
       formRef.current?.reset();
+      setTeamLoading(true);
+      if (active === "devices") {
+        setMobileLoading(true);
+        setMobileEnrollmentQr(null);
+        void Promise.all([listTeamMembers(), listMobileAssignments()])
+          .then(([team, linked]) => { setMembers(team); setMobileAssignments(linked); })
+          .catch(() => setSaveMessage("No se pudo cargar el equipo o los accesos móviles de Firebase."))
+          .finally(() => { setTeamLoading(false); setMobileLoading(false); });
+      } else {
+        void listTeamMembers()
+          .then(setMembers)
+          .catch(() => setSaveMessage("No se pudo leer el equipo de Firebase. Revisá el acceso del usuario y las reglas de Firestore."))
+          .finally(() => setTeamLoading(false));
+      }
       return;
     }
     const saved = localStorage.getItem(settingsKey(uid, active));
@@ -249,12 +269,37 @@ export default function WorkspaceSettings() {
         setSaveMessage("Completá nombre, correo, función y permiso.");
         return;
       }
-      const member: AuthorizedMember = { id: email, name, email, role, permission };
-      const nextMembers = [...members.filter((item) => item.email !== email), member];
-      localStorage.setItem(teamMembersKey(uid), JSON.stringify(nextMembers));
-      setMembers(nextMembers);
-      form.reset();
-      setSaveMessage("Persona guardada y agregada a la lista de este navegador.");
+      const user = getClientAuth().currentUser;
+      if (!user?.email) {
+        setSaveMessage("No se pudo identificar la cuenta que administra este estudio.");
+        return;
+      }
+      try {
+        await saveTeamMember({ name, email, role, permission }, { uid, email: user.email });
+        setMembers(await listTeamMembers());
+        form.reset();
+        setSaveMessage("Persona guardada en Firebase y agregada al equipo.");
+      } catch {
+        setSaveMessage("No se pudo guardar en Firebase. Revisá las reglas de Firestore y los permisos del estudio.");
+      }
+      return;
+    }
+    if (active === "devices") {
+      const email = String(new FormData(form).get("Integrante de la aplicación móvil") ?? "").trim().toLowerCase();
+      const permission = String(new FormData(form).get("Permiso de la aplicación móvil") ?? "");
+      if (!email) {
+        setSaveMessage("Primero agregá a la persona al equipo y luego seleccionala aquí.");
+        return;
+      }
+      try {
+        const enrollment = await createMobileEnrollment(email, permission);
+        setMobileEnrollmentQr(enrollment);
+        setMobileAssignments(await listMobileAssignments());
+        setSaveMessage("Acceso móvil asignado en Firebase. El QR vence en 10 minutos y se usa una sola vez.");
+      } catch (reason) {
+        const code = (reason as { code?: string })?.code;
+        setSaveMessage(code === "functions/failed-precondition" ? "La persona debe estar guardada primero en Equipo y permisos." : "No se pudo asignar el acceso móvil. Revisá la sesión y los permisos del estudio.");
+      }
       return;
     }
     const values: Record<string, string | boolean> = {};
@@ -309,8 +354,8 @@ export default function WorkspaceSettings() {
       </button>)}
     </nav>
     <form className="settings-active-panel" key={active} ref={formRef} onSubmit={saveSettings}>
-      <ActiveSection members={members} />
-      <div className="settings-save-bar"><p role="status" aria-live="polite">{saveMessage}</p><button type="submit">{active === "team" ? "Guardar y agregar" : "Guardar cambios"}</button></div>
+      <ActiveSection members={members} loading={active === "devices" ? mobileLoading : teamLoading} assignments={mobileAssignments} enrollmentQr={mobileEnrollmentQr} />
+      <div className="settings-save-bar"><p role="status" aria-live="polite">{saveMessage}</p><button type="submit">{active === "team" ? "Guardar y agregar" : active === "devices" ? "Asignar y generar QR" : "Guardar cambios"}</button></div>
     </form>
   </>;
 }

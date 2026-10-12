@@ -3,9 +3,37 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function authorized(studioId) {
       return request.auth != null
-        && request.auth.token.email == 'sebastiancharpentier@gmail.com'
         && request.auth.token.email_verified == true
-        && studioId == 'estudio-bernabe';
+        && (
+          (request.auth.token.email == 'sebastiancharpentier@gmail.com' && studioId == 'lima-legal')
+          || (
+            request.auth.token.studioId == studioId
+            && request.auth.token.studioRole in ['owner', 'admin', 'member']
+            && request.auth.token.subscriptionStatus in ['active', 'trialing']
+          )
+      );
+    }
+    function canManageTeam(studioId) {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && (
+          (request.auth.token.email == 'sebastiancharpentier@gmail.com' && studioId == 'lima-legal')
+          || (
+            request.auth.token.studioId == studioId
+            && request.auth.token.studioRole in ['owner', 'admin']
+            && request.auth.token.subscriptionStatus in ['active', 'trialing']
+          )
+        );
+    }
+    function validTeamMember(studioId) {
+      return request.resource.data.studioId == studioId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.role in ['Profesional', 'Administración', 'Procuración', 'Asistencia jurídica']
+        && request.resource.data.permission in ['Consulta', 'Carga y edición', 'Administración']
+        && request.resource.data.updatedBy == request.auth.token.email;
     }
     function validClientLink(studioId, clientId) {
       return exists(/databases/$(database)/documents/studios/$(studioId)/clients/$(clientId))
@@ -285,6 +313,18 @@ service cloud.firestore {
         && request.resource.data.excerpt is string
         && request.resource.data.note is string;
       allow update, delete: if false;
+    }
+    match /studios/{studioId}/teamMembers/{memberId} {
+      allow read: if authorized(studioId);
+      allow create: if canManageTeam(studioId)
+        && validTeamMember(studioId)
+        && request.resource.data.createdBy == request.auth.token.email;
+      allow update: if canManageTeam(studioId)
+        && resource.data.studioId == studioId
+        && validTeamMember(studioId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if canManageTeam(studioId);
     }
     match /studios/{studioId}/integrations/{integrationId} {
       allow read, write: if false;

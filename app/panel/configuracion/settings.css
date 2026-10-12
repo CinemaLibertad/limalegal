@@ -18,6 +18,12 @@
 .settings-member-permissions { display: flex; flex-wrap: wrap; gap: 7px; }
 .settings-member-permissions span { padding: 4px 8px; border: 1px solid #c3d4e8; border-radius: 999px; background: #fff; }
 .settings-member-footnote { margin: 12px 0 0; color: #536a83; font-size: 10px; line-height: 1.5; }
+.settings-mobile-qr { display: flex; align-items: center; gap: 16px; margin: 12px 0 18px; padding: 12px; border: 1px solid #98c92a; border-radius: 10px; background: #f8fce9; }
+.settings-mobile-qr img { width: 144px; height: 144px; flex: none; border-radius: 6px; background: #fff; }
+.settings-mobile-qr > div { display: grid; gap: 6px; min-width: 0; }
+.settings-mobile-qr strong { color: #173a60; font-size: 14px; }
+.settings-mobile-qr span,.settings-mobile-qr small { color: #42566f; font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .settings-mobile-qr { align-items: flex-start; flex-direction: column; } }
 .settings-integration-heading,
 .settings-integration-details,
 .settings-integration-actions {

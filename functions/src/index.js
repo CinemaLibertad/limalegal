@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { getApps, initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 const { createCipheriv, createDecipheriv, createHash, randomBytes } = require("node:crypto");
 
@@ -660,5 +661,151 @@ exports.getJurisprudenceDetails = onCall(
     const apiKey = requireKey();
     const sessionId = await connectMcp(apiKey);
     return { provider: "juridica-multisource", result: await detailTool(providerId, apiKey, sessionId) };
+  },
+);
+
+const mobilePermissions = new Set(["Consulta", "Carga de actividad"]);
+const mobileAppId = "com.nativa.limalegal";
+const hashMobileCode = (value) => createHash("sha256").update(value).digest("hex");
+const memberIdForEmail = (email) => createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+
+exports.createMobileEnrollment = onCall(
+  { region: "southamerica-east1", maxInstances: 2, cors: appOrigins },
+  async (request) => {
+    requireAuthorized(request);
+    const email = typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : "";
+    const permission = typeof request.data?.permission === "string" ? request.data.permission : "";
+    if (!email || email.length > 254 || !email.includes("@") || !mobilePermissions.has(permission)) {
+      throw new HttpsError("invalid-argument", "Seleccioná un integrante del equipo y un permiso válido para la aplicación.");
+    }
+    const memberId = memberIdForEmail(email);
+    const memberRef = adminDb.doc(`studios/${studioId}/teamMembers/${memberId}`);
+    const memberSnapshot = await memberRef.get();
+    if (!memberSnapshot.exists || memberSnapshot.get("email") !== email) {
+      throw new HttpsError("failed-precondition", "Primero agregá esta persona al equipo del estudio.");
+    }
+    const code = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const enrollmentRef = adminDb.doc(`studios/${studioId}/mobileEnrollmentCodes/${hashMobileCode(code)}`);
+    await adminDb.runTransaction(async (transaction) => {
+      const latestMember = await transaction.get(memberRef);
+      if (!latestMember.exists || latestMember.get("email") !== email) {
+        throw new HttpsError("failed-precondition", "La persona ya no figura en el equipo del estudio.");
+      }
+      transaction.set(memberRef, {
+        mobileAccess: true,
+        mobilePermission: permission,
+        mobileAccessUpdatedAt: FieldValue.serverTimestamp(),
+        mobileAccessUpdatedBy: request.auth.token.email,
+      }, { merge: true });
+      transaction.create(enrollmentRef, {
+        studioId,
+        memberId,
+        email,
+        permission,
+        state: "pending",
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt,
+        createdBy: request.auth.uid,
+      });
+    });
+    return {
+      appId: mobileAppId,
+      email,
+      permission,
+      code,
+      link: `limalegal://mobile-enrollment?code=${encodeURIComponent(code)}`,
+      expiresAt,
+    };
+  },
+);
+
+exports.listMobileAssignments = onCall(
+  { region: "southamerica-east1", maxInstances: 2, cors: appOrigins },
+  async (request) => {
+    requireAuthorized(request);
+    const members = await adminDb.collection(`studios/${studioId}/teamMembers`).get();
+    const assignments = await Promise.all(members.docs.filter((member) => member.get("mobileAccess") === true).map(async (member) => {
+      const devices = await member.ref.collection("devices").get();
+      return {
+        memberId: member.id,
+        name: member.get("name") || "",
+        email: member.get("email") || "",
+        permission: member.get("mobilePermission") || "Consulta",
+        appId: mobileAppId,
+        devices: devices.docs.map((device) => ({
+          id: device.id,
+          name: device.get("name") || "Dispositivo móvil",
+          linkedAt: device.get("linkedAt")?.toDate?.().toISOString() || null,
+        })),
+      };
+    }));
+    return { assignments };
+  },
+);
+
+exports.redeemMobileEnrollment = onCall(
+  { region: "southamerica-east1", maxInstances: 5, cors: appOrigins },
+  async (request) => {
+    const auth = request.auth;
+    const email = typeof auth?.token?.email === "string" ? auth.token.email.trim().toLowerCase() : "";
+    if (!auth || auth.token.email_verified !== true || auth.token.firebase?.sign_in_provider !== "google.com") {
+      throw new HttpsError("unauthenticated", "Iniciá sesión con una cuenta de Google verificada para vincular la aplicación.");
+    }
+    const code = typeof request.data?.code === "string" ? request.data.code : "";
+    const deviceId = typeof request.data?.deviceId === "string" ? request.data.deviceId : "";
+    const deviceName = typeof request.data?.deviceName === "string" ? request.data.deviceName.trim().slice(0, 80) : "Dispositivo Android";
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(code) || !/^[A-Za-z0-9_-]{8,128}$/.test(deviceId)) {
+      throw new HttpsError("invalid-argument", "El QR o la identificación del dispositivo no son válidos.");
+    }
+    const codeRef = adminDb.doc(`studios/${studioId}/mobileEnrollmentCodes/${hashMobileCode(code)}`);
+    let enrollment;
+    await adminDb.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(codeRef);
+      if (!snapshot.exists) throw new HttpsError("not-found", "El QR no es válido o ya fue utilizado.");
+      const data = snapshot.data();
+      if (data.state !== "pending" || data.expiresAt <= Date.now()) {
+        throw new HttpsError("deadline-exceeded", "El QR venció o ya fue utilizado. Pedí uno nuevo desde la web.");
+      }
+      if (data.email !== email) {
+        throw new HttpsError("permission-denied", "La cuenta de Google no coincide con el correo autorizado para esta aplicación.");
+      }
+      const memberRef = adminDb.doc(`studios/${studioId}/teamMembers/${data.memberId}`);
+      const member = await transaction.get(memberRef);
+      if (!member.exists || member.get("email") !== email || member.get("mobileAccess") !== true) {
+        throw new HttpsError("permission-denied", "Esta persona ya no tiene autorización para usar la aplicación.");
+      }
+      enrollment = { data, memberRef, memberName: member.get("name") || "" };
+      transaction.update(codeRef, { state: "redeeming", redeemingUid: auth.uid, redeemingAt: FieldValue.serverTimestamp() });
+    });
+
+    try {
+      const authUser = await getAuth().getUser(auth.uid);
+      await getAuth().setCustomUserClaims(auth.uid, {
+        ...(authUser.customClaims || {}),
+        limaLegalMobile: { studioId, memberId: enrollment.data.memberId, permission: enrollment.data.permission },
+      });
+      const deviceDocId = hashMobileCode(`${auth.uid}:${deviceId}`);
+      await adminDb.runTransaction(async (transaction) => {
+        const currentCode = await transaction.get(codeRef);
+        if (!currentCode.exists || currentCode.get("state") !== "redeeming" || currentCode.get("redeemingUid") !== auth.uid) {
+          throw new HttpsError("aborted", "La vinculación ya fue procesada.");
+        }
+        transaction.update(codeRef, { state: "consumed", consumedAt: FieldValue.serverTimestamp(), consumedBy: auth.uid });
+        transaction.set(enrollment.memberRef.collection("devices").doc(deviceDocId), {
+          uid: auth.uid, email, deviceId, name: deviceName, appId: mobileAppId,
+          permission: enrollment.data.permission, linkedAt: FieldValue.serverTimestamp(), status: "active",
+        });
+      });
+      return { studioId, memberName: enrollment.memberName, email, permission: enrollment.data.permission, appId: mobileAppId };
+    } catch (error) {
+      await adminDb.runTransaction(async (transaction) => {
+        const currentCode = await transaction.get(codeRef);
+        if (currentCode.exists && currentCode.get("state") === "redeeming" && currentCode.get("redeemingUid") === auth.uid) {
+          transaction.update(codeRef, { state: "pending", redeemingUid: FieldValue.delete(), redeemingAt: FieldValue.delete() });
+        }
+      }).catch(() => undefined);
+      throw error;
+    }
   },
 );

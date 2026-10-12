@@ -3,9 +3,15 @@ service firebase.storage {
   match /b/{bucket}/o {
     function isAuthorizedStudio(studioId) {
       return request.auth != null
-        && request.auth.token.email == 'sebastiancharpentier@gmail.com'
         && request.auth.token.email_verified == true
-        && studioId == 'estudio-bernabe';
+        && (
+          (request.auth.token.email == 'sebastiancharpentier@gmail.com' && studioId == 'lima-legal')
+          || (
+            request.auth.token.studioId == studioId
+            && request.auth.token.studioRole in ['owner', 'admin', 'member']
+            && request.auth.token.subscriptionStatus in ['active', 'trialing']
+          )
+        );
     }
 
     match /studios/{studioId}/activities/{entryId}/{fileName} {
