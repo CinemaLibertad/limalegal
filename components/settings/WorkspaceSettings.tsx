@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 import GoogleDriveStorageCard from "@/components/settings/GoogleDriveStorageCard";
 import OneDriveStorageCard from "@/components/settings/OneDriveStorageCard";
+import { getClientAuth } from "@/lib/firebase/client";
+
+const settingsKey = (uid: string, section: string) => `lima-legal:workspace-settings:${uid}:${section}`;
 
 const sections = [
   ["identity", "Identidad del estudio"],
@@ -195,7 +198,9 @@ export default function WorkspaceSettings() {
   const ActiveSection = content[active];
   useEffect(() => {
     setSaveMessage("");
-    const saved = localStorage.getItem(`lima-legal:workspace-settings:${active}`);
+    const uid = getClientAuth().currentUser?.uid;
+    if (!uid) return;
+    const saved = localStorage.getItem(settingsKey(uid, active));
     if (!saved || !formRef.current) return;
     const values = JSON.parse(saved) as Record<string, string | boolean>;
     formRef.current.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
@@ -210,10 +215,16 @@ export default function WorkspaceSettings() {
     });
   }, [active]);
 
-  function saveSettings(event: FormEvent<HTMLFormElement>) {
+  async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const uid = getClientAuth().currentUser?.uid;
+    if (!uid) {
+      setSaveMessage("Iniciá sesión nuevamente para guardar los cambios.");
+      return;
+    }
     const values: Record<string, string | boolean> = {};
-    event.currentTarget.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
       if (control instanceof HTMLInputElement && control.type === "file") return;
       if (control instanceof HTMLInputElement && control.type === "radio") {
         if (control.checked) values[control.name] = control.value;
@@ -223,8 +234,35 @@ export default function WorkspaceSettings() {
         values[control.name] = control.value;
       }
     });
-    localStorage.setItem(`lima-legal:workspace-settings:${active}`, JSON.stringify(values));
-    setSaveMessage("Cambios guardados en este navegador.");
+    const storageKey = settingsKey(uid, active);
+    const existing = JSON.parse(localStorage.getItem(storageKey) ?? "{}") as Record<string, string | boolean>;
+    if (active === "identity") {
+      const logoInput = form.querySelector<HTMLInputElement>('input[type="file"]');
+      const file = logoInput?.files?.[0];
+      if (file && file.size > 1024 * 1024) {
+        setSaveMessage("El logotipo debe pesar menos de 1 MB.");
+        return;
+      }
+      if (file) {
+        let logoDataUrl: string;
+        try {
+          logoDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error("No se pudo leer el logotipo."));
+            reader.readAsDataURL(file);
+          });
+        } catch {
+          setSaveMessage("No se pudo cargar el logotipo seleccionado.");
+          return;
+        }
+        values.logoDataUrl = logoDataUrl;
+      } else if (existing.logoDataUrl) {
+        values.logoDataUrl = existing.logoDataUrl;
+      }
+    }
+    localStorage.setItem(storageKey, JSON.stringify(values));
+    setSaveMessage("Cambios guardados para esta cuenta en este navegador.");
   }
 
   return <>

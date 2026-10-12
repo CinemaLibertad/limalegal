@@ -78,3 +78,43 @@
   border-radius: var(--panel-card-radius);
   box-shadow: var(--panel-card-shadow);
 }
+
+.panel-main .panel-welcome {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  align-items: center;
+  gap: 28px;
+  min-height: 220px;
+  padding: 26px 30px;
+}
+
+.panel-welcome-studio-logo {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,.17);
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+  color: #c4d1df;
+  font-size: 12px;
+}
+
+.panel-welcome-studio-logo img {
+  display: block;
+  width: 100%;
+  max-height: 165px;
+  object-fit: contain;
+}
+
+.panel-welcome-details h1 { margin: 8px 0 14px; font-size: 23px; }
+.panel-welcome-details h2 { margin: 0 0 9px; color: #fff; font: 600 19px 'Playfair Display', serif; }
+.panel-welcome-details ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 20px; padding: 0; margin: 0; list-style: none; }
+.panel-welcome-details li,.panel-welcome-details>p { margin: 0; color: #c2cfdd; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+
+@media (max-width: 700px) {
+  .panel-main .panel-welcome { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 19px; }
+  .panel-welcome-studio-logo { min-height: 100px; }
+  .panel-welcome-studio-logo img { max-height: 110px; }
+  .panel-welcome-details ul { grid-template-columns: minmax(0, 1fr); }
+}
