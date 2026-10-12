@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bernabé Nieto | Estudio Jurídico",
-  description: "Justicia, compromiso y excelencia.",
+  title: "Lima Legal | Gestión e investigación jurídica",
+  description: "Una plataforma para organizar, investigar y coordinar el trabajo jurídico.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
