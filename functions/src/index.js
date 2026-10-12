@@ -9,10 +9,15 @@ const oneDriveClientSecret = defineSecret("ONEDRIVE_CLIENT_SECRET");
 const oneDriveTokenEncryptionKey = defineSecret("ONEDRIVE_TOKEN_ENCRYPTION_KEY");
 const googleDriveOAuthCredentials = defineSecret("GOOGLE_DRIVE_OAUTH_CREDENTIALS");
 const studioId = "lima-legal";
+const appOrigins = [
+  "https://limalegal--lima-legal.us-east4.hosted.app",
+  "https://limalegal.com.ar",
+  "https://www.limalegal.com.ar",
+];
 const oneDriveClientId = "efd07482-a827-4c12-9b15-3fe543d280c3";
-const oneDriveRedirectUri = "https://bernabenieto.com.ar/api/integrations/onedrive/callback";
+const oneDriveRedirectUri = "https://limalegal.com.ar/api/integrations/onedrive/callback";
 const oneDriveScopes = "openid profile offline_access User.Read Files.ReadWrite.AppFolder";
-const googleDriveRedirectUri = "https://bernabenieto.com.ar/api/integrations/google-drive/callback";
+const googleDriveRedirectUri = "https://limalegal.com.ar/api/integrations/google-drive/callback";
 const googleDriveScopes = "openid email profile https://www.googleapis.com/auth/drive.file";
 const allowedEmail = "sebastiancharpentier@gmail.com";
 const officialHosts = ["saij.gob.ar", "csjn.gov.ar", "scba.gov.ar"];
@@ -39,7 +44,7 @@ function encryptOneDriveToken(token) {
   return { ciphertext: ciphertext.toString("base64"), iv: iv.toString("base64"), tag: cipher.getAuthTag().toString("base64") };
 }
 
-exports.startOneDriveOAuth = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
+exports.startOneDriveOAuth = onCall({ region: "southamerica-east1", maxInstances: 2, cors: appOrigins }, async (request) => {
   const uid = requireOneDriveUser(request);
   const state = randomBytes(32).toString("base64url");
   const codeVerifier = randomBytes(32).toString("base64url");
@@ -63,7 +68,7 @@ exports.startOneDriveOAuth = onCall({ region: "southamerica-east1", maxInstances
 });
 
 exports.completeOneDriveOAuth = onCall(
-  { region: "southamerica-east1", secrets: [oneDriveClientSecret, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [oneDriveClientSecret, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2, cors: appOrigins },
   async (request) => {
     const uid = requireOneDriveUser(request);
     const code = typeof request.data?.code === "string" ? request.data.code : "";
@@ -131,7 +136,7 @@ exports.completeOneDriveOAuth = onCall(
   },
 );
 
-exports.getOneDriveStatus = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
+exports.getOneDriveStatus = onCall({ region: "southamerica-east1", maxInstances: 2, cors: appOrigins }, async (request) => {
   requireOneDriveUser(request);
   const snapshot = await adminDb.doc(`studios/${studioId}/integrations/onedrive`).get();
   if (!snapshot.exists || snapshot.data().status !== "connected") return { connected: false };
@@ -139,14 +144,14 @@ exports.getOneDriveStatus = onCall({ region: "southamerica-east1", maxInstances:
   return { connected: true, accountLabel: data.accountLabel || null, connectedAt: data.connectedAt?.toDate?.().toISOString() || null };
 });
 
-exports.disconnectOneDrive = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
+exports.disconnectOneDrive = onCall({ region: "southamerica-east1", maxInstances: 2, cors: appOrigins }, async (request) => {
   requireOneDriveUser(request);
   await adminDb.doc(`studios/${studioId}/integrations/onedrive`).delete();
   return { connected: false };
 });
 
 exports.createOneDriveUploadSession = onCall(
-  { region: "southamerica-east1", secrets: [oneDriveClientSecret, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [oneDriveClientSecret, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2, cors: appOrigins },
   async (request) => {
     const uid = requireOneDriveUser(request);
     const name = typeof request.data?.name === "string" ? request.data.name.trim() : "";
@@ -252,7 +257,7 @@ async function getGoogleDriveAccessToken(uid) {
 }
 
 exports.startGoogleDriveOAuth = onCall(
-  { region: "southamerica-east1", secrets: [googleDriveOAuthCredentials], maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [googleDriveOAuthCredentials], maxInstances: 2, cors: appOrigins },
   async (request) => {
     const uid = requireOneDriveUser(request);
     const credentials = getGoogleDriveOAuthCredentials();
@@ -280,7 +285,7 @@ exports.startGoogleDriveOAuth = onCall(
 );
 
 exports.completeGoogleDriveOAuth = onCall(
-  { region: "southamerica-east1", secrets: [googleDriveOAuthCredentials, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [googleDriveOAuthCredentials, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2, cors: appOrigins },
   async (request) => {
     const uid = requireOneDriveUser(request);
     const credentials = getGoogleDriveOAuthCredentials();
@@ -365,7 +370,7 @@ exports.completeGoogleDriveOAuth = onCall(
   },
 );
 
-exports.getGoogleDriveStatus = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
+exports.getGoogleDriveStatus = onCall({ region: "southamerica-east1", maxInstances: 2, cors: appOrigins }, async (request) => {
   requireOneDriveUser(request);
   const snapshot = await adminDb.doc(`studios/${studioId}/integrations/google-drive`).get();
   if (!snapshot.exists || snapshot.data().status !== "connected") return { connected: false };
@@ -373,14 +378,14 @@ exports.getGoogleDriveStatus = onCall({ region: "southamerica-east1", maxInstanc
   return { connected: true, accountLabel: data.accountLabel || null, connectedAt: data.connectedAt?.toDate?.().toISOString() || null };
 });
 
-exports.disconnectGoogleDrive = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
+exports.disconnectGoogleDrive = onCall({ region: "southamerica-east1", maxInstances: 2, cors: appOrigins }, async (request) => {
   requireOneDriveUser(request);
   await adminDb.doc(`studios/${studioId}/integrations/google-drive`).delete();
   return { connected: false };
 });
 
 exports.createGoogleDriveUploadSession = onCall(
-  { region: "southamerica-east1", secrets: [googleDriveOAuthCredentials, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [googleDriveOAuthCredentials, oneDriveTokenEncryptionKey], timeoutSeconds: 30, maxInstances: 2, cors: appOrigins },
   async (request) => {
     const uid = requireOneDriveUser(request);
     const credentials = getGoogleDriveOAuthCredentials();
@@ -620,7 +625,7 @@ function requireKey() {
 }
 
 exports.searchJurisprudence = onCall(
-  { region: "southamerica-east1", secrets: [juridicaApiKey], timeoutSeconds: 45, maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [juridicaApiKey], timeoutSeconds: 45, maxInstances: 2, cors: appOrigins },
   async (request) => {
     requireAuthorized(request);
     const query = typeof request.data?.query === "string" ? request.data.query.trim() : "";
@@ -647,7 +652,7 @@ exports.searchJurisprudence = onCall(
 );
 
 exports.getJurisprudenceDetails = onCall(
-  { region: "southamerica-east1", secrets: [juridicaApiKey], timeoutSeconds: 45, maxInstances: 2 },
+  { region: "southamerica-east1", secrets: [juridicaApiKey], timeoutSeconds: 45, maxInstances: 2, cors: appOrigins },
   async (request) => {
     requireAuthorized(request);
     const providerId = typeof request.data?.providerId === "string" ? request.data.providerId.trim() : "";

@@ -2,9 +2,8 @@ const API_PREFIX = "/api/v1";
 const CACHE_VERSION = "catalog-2026-10-11-import-1";
 const ALLOWED_ORIGINS = new Set([
   "https://limalegal--lima-legal.us-east4.hosted.app",
-  "https://bernabenieto.com.ar",
-  "https://www.bernabenieto.com.ar",
-  "https://bernabe--estudio-bernabe.us-east4.hosted.app",
+  "https://limalegal.com.ar",
+  "https://www.limalegal.com.ar",
   "http://localhost:3000",
 ]);
 

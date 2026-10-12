@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-const publicOrigin = "https://bernabenieto.com.ar";
+const publicOrigin = "https://limalegal.com.ar";
 
 export function GET(request: NextRequest) {
   const url = new URL("/panel/configuracion", publicOrigin);
