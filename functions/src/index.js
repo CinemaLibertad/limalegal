@@ -8,6 +8,7 @@ const juridicaApiKey = defineSecret("JURIDICA_API_KEY");
 const oneDriveClientSecret = defineSecret("ONEDRIVE_CLIENT_SECRET");
 const oneDriveTokenEncryptionKey = defineSecret("ONEDRIVE_TOKEN_ENCRYPTION_KEY");
 const googleDriveOAuthCredentials = defineSecret("GOOGLE_DRIVE_OAUTH_CREDENTIALS");
+const studioId = "lima-legal";
 const oneDriveClientId = "efd07482-a827-4c12-9b15-3fe543d280c3";
 const oneDriveRedirectUri = "https://bernabenieto.com.ar/api/integrations/onedrive/callback";
 const oneDriveScopes = "openid profile offline_access User.Read Files.ReadWrite.AppFolder";
@@ -43,7 +44,7 @@ exports.startOneDriveOAuth = onCall({ region: "southamerica-east1", maxInstances
   const state = randomBytes(32).toString("base64url");
   const codeVerifier = randomBytes(32).toString("base64url");
   const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-  await adminDb.doc(`studios/estudio-bernabe/oneDriveOAuthStates/${state}`).set({
+  await adminDb.doc(`studios/${studioId}/oneDriveOAuthStates/${state}`).set({
     uid, codeVerifier, createdAt: FieldValue.serverTimestamp(), expiresAt: Date.now() + 10 * 60 * 1000,
   });
   const authorize = new URL("https://login.microsoftonline.com/common/oauth2/v2.0/authorize");
@@ -69,7 +70,7 @@ exports.completeOneDriveOAuth = onCall(
     const state = typeof request.data?.state === "string" ? request.data.state : "";
     if (!code || code.length > 4096 || !/^[A-Za-z0-9_-]{32,128}$/.test(state)) throw new HttpsError("invalid-argument", "La respuesta OAuth no es válida.");
 
-    const stateRef = adminDb.doc(`studios/estudio-bernabe/oneDriveOAuthStates/${state}`);
+    const stateRef = adminDb.doc(`studios/${studioId}/oneDriveOAuthStates/${state}`);
     const stateSnapshot = await stateRef.get();
     const stateData = stateSnapshot.data();
     if (!stateSnapshot.exists || stateData.uid !== uid || stateData.expiresAt < Date.now()) {
@@ -116,7 +117,7 @@ exports.completeOneDriveOAuth = onCall(
     } catch { /* The connection remains valid without a display label. */ }
 
     const encrypted = encryptOneDriveToken(tokenResponse.refresh_token);
-    await adminDb.doc("studios/estudio-bernabe/integrations/onedrive").set({
+    await adminDb.doc(`studios/${studioId}/integrations/onedrive`).set({
       provider: "microsoft-onedrive",
       accountLabel,
       encryptedRefreshToken: encrypted,
@@ -132,7 +133,7 @@ exports.completeOneDriveOAuth = onCall(
 
 exports.getOneDriveStatus = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
   requireOneDriveUser(request);
-  const snapshot = await adminDb.doc("studios/estudio-bernabe/integrations/onedrive").get();
+  const snapshot = await adminDb.doc(`studios/${studioId}/integrations/onedrive`).get();
   if (!snapshot.exists || snapshot.data().status !== "connected") return { connected: false };
   const data = snapshot.data();
   return { connected: true, accountLabel: data.accountLabel || null, connectedAt: data.connectedAt?.toDate?.().toISOString() || null };
@@ -140,7 +141,7 @@ exports.getOneDriveStatus = onCall({ region: "southamerica-east1", maxInstances:
 
 exports.disconnectOneDrive = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
   requireOneDriveUser(request);
-  await adminDb.doc("studios/estudio-bernabe/integrations/onedrive").delete();
+  await adminDb.doc(`studios/${studioId}/integrations/onedrive`).delete();
   return { connected: false };
 });
 
@@ -153,7 +154,7 @@ exports.createOneDriveUploadSession = onCall(
     if (!name || name.length > 255 || /[\\/\u0000-\u001f]/.test(name) || !Number.isSafeInteger(size) || size < 0 || size > 250 * 1024 * 1024) {
       throw new HttpsError("invalid-argument", "El nombre o tamaño del archivo no es válido (máximo 250 MB).");
     }
-    const integrationRef = adminDb.doc("studios/estudio-bernabe/integrations/onedrive");
+    const integrationRef = adminDb.doc(`studios/${studioId}/integrations/onedrive`);
     const integration = (await integrationRef.get()).data();
     if (!integration || integration.status !== "connected" || integration.connectedBy !== uid || !integration.encryptedRefreshToken) {
       throw new HttpsError("failed-precondition", "Conectá OneDrive desde Configuración antes de guardar documentos.");
@@ -215,7 +216,7 @@ function getGoogleDriveOAuthCredentials() {
 
 async function getGoogleDriveAccessToken(uid) {
   const credentials = getGoogleDriveOAuthCredentials();
-  const integrationRef = adminDb.doc("studios/estudio-bernabe/integrations/google-drive");
+  const integrationRef = adminDb.doc(`studios/${studioId}/integrations/google-drive`);
   const snapshot = await integrationRef.get();
   const integration = snapshot.data();
   if (!snapshot.exists || integration.status !== "connected" || integration.connectedBy !== uid || !integration.encryptedRefreshToken) {
@@ -258,7 +259,7 @@ exports.startGoogleDriveOAuth = onCall(
     const state = randomBytes(32).toString("base64url");
     const codeVerifier = randomBytes(32).toString("base64url");
     const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-    await adminDb.doc(`studios/estudio-bernabe/googleDriveOAuthStates/${state}`).set({
+    await adminDb.doc(`studios/${studioId}/googleDriveOAuthStates/${state}`).set({
       uid, codeVerifier, createdAt: FieldValue.serverTimestamp(), expiresAt: Date.now() + 10 * 60 * 1000,
     });
     const authorize = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -287,7 +288,7 @@ exports.completeGoogleDriveOAuth = onCall(
     const state = typeof request.data?.state === "string" ? request.data.state : "";
     if (!code || code.length > 4096 || !/^[A-Za-z0-9_-]{32,128}$/.test(state)) throw new HttpsError("invalid-argument", "La respuesta OAuth de Google no es válida.");
 
-    const stateRef = adminDb.doc(`studios/estudio-bernabe/googleDriveOAuthStates/${state}`);
+    const stateRef = adminDb.doc(`studios/${studioId}/googleDriveOAuthStates/${state}`);
     const stateSnapshot = await stateRef.get();
     const stateData = stateSnapshot.data();
     if (!stateSnapshot.exists || stateData.uid !== uid || stateData.expiresAt < Date.now()) {
@@ -349,7 +350,7 @@ exports.completeGoogleDriveOAuth = onCall(
       rootFolder = await rootResponse.json();
     }
     const encrypted = encryptOneDriveToken(tokenResponse.refresh_token);
-    await adminDb.doc("studios/estudio-bernabe/integrations/google-drive").set({
+    await adminDb.doc(`studios/${studioId}/integrations/google-drive`).set({
       provider: "google-drive",
       accountLabel: typeof profile.email === "string" ? profile.email : null,
       rootFolderId: rootFolder.id,
@@ -366,7 +367,7 @@ exports.completeGoogleDriveOAuth = onCall(
 
 exports.getGoogleDriveStatus = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
   requireOneDriveUser(request);
-  const snapshot = await adminDb.doc("studios/estudio-bernabe/integrations/google-drive").get();
+  const snapshot = await adminDb.doc(`studios/${studioId}/integrations/google-drive`).get();
   if (!snapshot.exists || snapshot.data().status !== "connected") return { connected: false };
   const data = snapshot.data();
   return { connected: true, accountLabel: data.accountLabel || null, connectedAt: data.connectedAt?.toDate?.().toISOString() || null };
@@ -374,7 +375,7 @@ exports.getGoogleDriveStatus = onCall({ region: "southamerica-east1", maxInstanc
 
 exports.disconnectGoogleDrive = onCall({ region: "southamerica-east1", maxInstances: 2 }, async (request) => {
   requireOneDriveUser(request);
-  await adminDb.doc("studios/estudio-bernabe/integrations/google-drive").delete();
+  await adminDb.doc(`studios/${studioId}/integrations/google-drive`).delete();
   return { connected: false };
 });
 
@@ -389,7 +390,7 @@ exports.createGoogleDriveUploadSession = onCall(
     if (!name || name.length > 255 || /[\\/\u0000-\u001f]/.test(name) || !mimeType || mimeType.length > 200 || !Number.isSafeInteger(size) || size < 0 || size > 5 * 1024 * 1024 * 1024 * 1024) {
       throw new HttpsError("invalid-argument", "El nombre, tipo o tamaño del archivo no es válido.");
     }
-    const integration = (await adminDb.doc("studios/estudio-bernabe/integrations/google-drive").get()).data();
+  const integration = (await adminDb.doc(`studios/${studioId}/integrations/google-drive`).get()).data();
     if (!integration?.rootFolderId) throw new HttpsError("failed-precondition", "Conectá Google Drive antes de guardar documentos.");
     const accessToken = await getGoogleDriveAccessToken(uid);
     let response;

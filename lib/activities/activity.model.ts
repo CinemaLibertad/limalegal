@@ -1,6 +1,6 @@
 import type { ClientId, CaseId, StudioId, UserId } from "../shared/ids";
 
-export const STUDIO_ID = "estudio-bernabe" as StudioId;
+export const STUDIO_ID = "lima-legal" as StudioId;
 export const ACTIVITY_TYPES = ["audiencia", "vencimiento", "reunion", "tarea", "recordatorio", "nota", "otro"] as const;
 export const ACTIVITY_PRIORITIES = ["normal", "importante", "urgente"] as const;
 export const ACTIVITY_STATUSES = ["pendiente", "confirmado", "realizado", "postergado", "cancelado"] as const;

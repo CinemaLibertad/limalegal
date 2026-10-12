@@ -9,8 +9,9 @@ import type { LegalCase, LegalCaseInput } from "../cases/case.model";
 import type { Activity, ActivityAudit, ActivityInput, ActivityStatus } from "../activities/activity.model";
 import { createActivityNotification } from "../notifications/notification.repository";
 import type { NotificationKind } from "../notifications/notification.model";
+import { STUDIO_ID } from "../activities/activity.model";
 
-const studio = "estudio-bernabe";
+const studio = String(STUDIO_ID);
 const clients = collection(firestore, "studios", studio, "clients");
 const cases = collection(firestore, "studios", studio, "cases");
 const activities = collection(firestore, "studios", studio, "activities");

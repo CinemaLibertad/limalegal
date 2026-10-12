@@ -7,6 +7,7 @@ import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import { getClientAuth } from "../../lib/firebase/client";
+import { STUDIO_ID } from "../../lib/activities/activity.model";
 import { listCases } from "../../lib/firebase/domain-repositories";
 import type { LegalAnnotation, LegalCitationSnapshot, LegalDraft, LegalDraftInput, LegalDraftVersion, JurisprudenceResult, JurisprudenceSearchResponse } from "../../lib/jurisprudence/jurisprudence.model";
 import { getJurisprudenceDetails, searchJurisprudence } from "../../lib/jurisprudence/jurisprudence.client";
@@ -110,7 +111,7 @@ export function JurisprudenceWorkspace() {
       const input: LegalDraftInput = { title: draftTitleRef.current.trim() || "Escrito sin título", content: editor.getJSON(), caseId: (caseIdRef.current || null) as LegalDraftInput["caseId"] };
       try {
         const saved = await saveLegalDraft(input, user, current?.id ?? null, current?.revision ?? 0);
-        const updated = { ...(current ?? { studioId: "estudio-bernabe", createdAt: "", createdBy: user.email ?? user.uid }), ...input, id: saved.id, revision: saved.revision, updatedAt: new Date().toISOString(), updatedBy: user.email ?? user.uid } as LegalDraft;
+        const updated = { ...(current ?? { studioId: STUDIO_ID, createdAt: "", createdBy: user.email ?? user.uid }), ...input, id: saved.id, revision: saved.revision, updatedAt: new Date().toISOString(), updatedBy: user.email ?? user.uid } as LegalDraft;
         activeDraftRef.current = updated; setActiveDraft(updated); setDirty(false); setSavedAt(new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }));
         setDrafts((previous) => [updated, ...previous.filter((item) => item.id !== updated.id)].slice(0, 50));
       } catch (reason) {

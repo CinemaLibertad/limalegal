@@ -5,8 +5,9 @@ import {
 import type { User } from "firebase/auth";
 import { firestore } from "../firebase/services";
 import type { LegalAnnotation, LegalCitationSnapshot, LegalDraft, LegalDraftInput, LegalDraftVersion, JurisprudenceResult } from "./jurisprudence.model";
+import { STUDIO_ID } from "../activities/activity.model";
 
-const studio = "estudio-bernabe";
+const studio = String(STUDIO_ID);
 const root = collection(firestore, "studios", studio, "legalDrafts");
 const citations = collection(firestore, "studios", studio, "legalCitations");
 const works = collection(firestore, "studios", studio, "legalWorks");
