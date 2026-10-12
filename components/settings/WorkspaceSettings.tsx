@@ -1,31 +1,31 @@
 "use client";
 
-import { useState, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 import GoogleDriveStorageCard from "@/components/settings/GoogleDriveStorageCard";
 import OneDriveStorageCard from "@/components/settings/OneDriveStorageCard";
 
 const sections = [
-  ["identity", "Identidad del estudio", "business"],
-  ["professionals", "Profesionales y matrículas", "badge"],
-  ["team", "Equipo y permisos", "group"],
-  ["documents", "Documentos y membretes", "description"],
-  ["storage", "Almacenamiento e integraciones", "cloud_sync"],
-  ["devices", "App móvil y dispositivos", "devices"],
-  ["appearance", "Apariencia y accesibilidad", "contrast"],
-  ["security", "Seguridad y auditoría", "verified_user"],
+  ["identity", "Identidad del estudio"],
+  ["professionals", "Profesionales y matrículas"],
+  ["team", "Equipo y permisos"],
+  ["documents", "Documentos y membretes"],
+  ["storage", "Almacenamiento e integraciones"],
+  ["devices", "App móvil y dispositivos"],
+  ["appearance", "Apariencia y accesibilidad"],
+  ["security", "Seguridad y auditoría"],
 ] as const;
 
 function Field({ label, type = "text", wide = false, placeholder }: { label: string; type?: InputHTMLAttributes<HTMLInputElement>["type"]; wide?: boolean; placeholder?: string }) {
   return <label className={`settings-field${wide ? " is-wide" : ""}`}>
     <span>{label}</span>
-    <input type={type} placeholder={placeholder ?? ""} />
+    <input name={label} type={type} placeholder={placeholder ?? ""} />
   </label>;
 }
 
 function TextField({ label, wide = false }: { label: string; wide?: boolean }) {
   return <label className={`settings-field${wide ? " is-wide" : ""}`}>
     <span>{label}</span>
-    <textarea rows={3} />
+    <textarea name={label} rows={3} />
   </label>;
 }
 
@@ -94,8 +94,8 @@ function TeamSection() {
       <div className="settings-fields-grid">
         <Field label="Nombre y apellido" />
         <Field label="Correo de la cuenta autorizada" type="email" />
-        <label className="settings-field"><span>Función en el estudio</span><select defaultValue=""><option value="" disabled>Seleccionar función</option><option>Profesional</option><option>Administración</option><option>Procuración</option><option>Asistencia jurídica</option></select></label>
-        <label className="settings-field"><span>Permiso inicial</span><select defaultValue=""><option value="" disabled>Seleccionar permiso</option><option>Consulta</option><option>Carga y edición</option><option>Administración</option></select></label>
+        <label className="settings-field"><span>Función en el estudio</span><select name="Función en el estudio" defaultValue=""><option value="" disabled>Seleccionar función</option><option>Profesional</option><option>Administración</option><option>Procuración</option><option>Asistencia jurídica</option></select></label>
+        <label className="settings-field"><span>Permiso inicial</span><select name="Permiso inicial" defaultValue=""><option value="" disabled>Seleccionar permiso</option><option>Consulta</option><option>Carga y edición</option><option>Administración</option></select></label>
       </div>
       <p className="settings-empty-note">No hay integrantes adicionales cargados.</p>
     </Card>
@@ -150,10 +150,10 @@ function AppearanceSection() {
         <label><input type="radio" name="theme" value="dark" /> Oscuro</label>
         <label><input type="radio" name="theme" value="system" /> Según el dispositivo</label>
       </fieldset>
-      <label className="settings-field"><span>Tamaño del texto</span><select defaultValue=""><option value="" disabled>Elegir tamaño</option><option>Pequeño</option><option>Estándar</option><option>Grande</option><option>Muy grande</option></select></label>
-      <label className="settings-check"><input type="checkbox" /> Alto contraste</label>
-      <label className="settings-check"><input type="checkbox" /> Reducir animaciones</label>
-      <label className="settings-check"><input type="checkbox" /> Resaltar el foco del teclado</label>
+      <label className="settings-field"><span>Tamaño del texto</span><select name="Tamaño del texto" defaultValue=""><option value="" disabled>Elegir tamaño</option><option>Pequeño</option><option>Estándar</option><option>Grande</option><option>Muy grande</option></select></label>
+      <label className="settings-check"><input name="Alto contraste" type="checkbox" /> Alto contraste</label>
+      <label className="settings-check"><input name="Reducir animaciones" type="checkbox" /> Reducir animaciones</label>
+      <label className="settings-check"><input name="Resaltar el foco del teclado" type="checkbox" /> Resaltar el foco del teclado</label>
     </Card>
   </div>;
 }
@@ -161,7 +161,7 @@ function AppearanceSection() {
 function SecuritySection() {
   return <div className="settings-card-grid">
     <Card title="Sesión y acceso" description="Opciones de protección del acceso al panel.">
-      <label className="settings-field"><span>Cierre automático por inactividad</span><select defaultValue=""><option value="" disabled>Seleccionar duración</option><option>15 minutos</option><option>30 minutos</option><option>1 hora</option></select></label>
+      <label className="settings-field"><span>Cierre automático por inactividad</span><select name="Cierre automático por inactividad" defaultValue=""><option value="" disabled>Seleccionar duración</option><option>15 minutos</option><option>30 minutos</option><option>1 hora</option></select></label>
     </Card>
     <Card title="Registro de actividad" description="Los cambios de configuración y accesos se presentarán cuando el registro esté integrado.">
       <p className="settings-empty-note">No hay actividad para mostrar.</p>
@@ -190,18 +190,55 @@ const content: Record<string, () => ReactNode> = {
 
 export default function WorkspaceSettings() {
   const [active, setActive] = useState<string>("identity");
+  const [saveMessage, setSaveMessage] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
   const ActiveSection = content[active];
+  useEffect(() => {
+    setSaveMessage("");
+    const saved = localStorage.getItem(`lima-legal:workspace-settings:${active}`);
+    if (!saved || !formRef.current) return;
+    const values = JSON.parse(saved) as Record<string, string | boolean>;
+    formRef.current.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
+      if (control instanceof HTMLInputElement && control.type === "file") return;
+      const value = values[control.name];
+      if (value === undefined) return;
+      if (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")) {
+        control.checked = control.type === "checkbox" ? value === true : value === control.value;
+      } else if (typeof value === "string") {
+        control.value = value;
+      }
+    });
+  }, [active]);
+
+  function saveSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values: Record<string, string | boolean> = {};
+    event.currentTarget.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input[name], textarea[name], select[name]").forEach((control) => {
+      if (control instanceof HTMLInputElement && control.type === "file") return;
+      if (control instanceof HTMLInputElement && control.type === "radio") {
+        if (control.checked) values[control.name] = control.value;
+      } else if (control instanceof HTMLInputElement && control.type === "checkbox") {
+        values[control.name] = control.checked;
+      } else {
+        values[control.name] = control.value;
+      }
+    });
+    localStorage.setItem(`lima-legal:workspace-settings:${active}`, JSON.stringify(values));
+    setSaveMessage("Cambios guardados en este navegador.");
+  }
+
   return <>
     <header className="domain-heading settings-page-heading">
       <div><span className="agenda-eyebrow">ESPACIO DE TRABAJO</span><h1>Configuración del espacio de trabajo</h1><p>Identidad del estudio, profesionales, documentos, accesos y preferencias.</p></div>
     </header>
     <nav className="settings-section-nav" aria-label="Secciones de configuración">
-      {sections.map(([id, label, icon]) => <button key={id} type="button" className={active === id ? "is-active" : ""} onClick={() => setActive(id)} aria-current={active === id ? "page" : undefined}>
-        <span className="material-symbols-outlined" aria-hidden="true">{icon}</span><span>{label}</span>
+      {sections.map(([id, label]) => <button key={id} type="button" className={active === id ? "is-active" : ""} onClick={() => setActive(id)} aria-current={active === id ? "page" : undefined}>
+        <span>{label}</span>
       </button>)}
     </nav>
-    <div className="settings-active-panel" key={active}>
+    <form className="settings-active-panel" key={active} ref={formRef} onSubmit={saveSettings}>
       <ActiveSection />
-    </div>
+      <div className="settings-save-bar"><p role="status" aria-live="polite">{saveMessage}</p><button type="submit">Guardar cambios</button></div>
+    </form>
   </>;
 }
