@@ -6,6 +6,8 @@ import OneDriveStorageCard from "@/components/settings/OneDriveStorageCard";
 import { getClientAuth } from "@/lib/firebase/client";
 
 const settingsKey = (uid: string, section: string) => `lima-legal:workspace-settings:${uid}:${section}`;
+const teamMembersKey = (uid: string) => `lima-legal:workspace-settings:${uid}:team-members`;
+type AuthorizedMember = { id: string; name: string; email: string; role: string; permission: string };
 
 const sections = [
   ["identity", "Identidad del estudio"],
@@ -18,10 +20,10 @@ const sections = [
   ["security", "Seguridad y auditoría"],
 ] as const;
 
-function Field({ label, type = "text", wide = false, placeholder }: { label: string; type?: InputHTMLAttributes<HTMLInputElement>["type"]; wide?: boolean; placeholder?: string }) {
+function Field({ label, type = "text", wide = false, placeholder, required = false }: { label: string; type?: InputHTMLAttributes<HTMLInputElement>["type"]; wide?: boolean; placeholder?: string; required?: boolean }) {
   return <label className={`settings-field${wide ? " is-wide" : ""}`}>
     <span>{label}</span>
-    <input name={label} type={type} placeholder={placeholder ?? ""} />
+    <input name={label} type={type} placeholder={placeholder ?? ""} required={required} />
   </label>;
 }
 
@@ -91,19 +93,23 @@ function ProfessionalSection() {
   </div>;
 }
 
-function TeamSection() {
+function TeamSection({ members }: { members: AuthorizedMember[] }) {
   return <div className="settings-card-grid">
     <Card title="Personas autorizadas" description="Definí quién puede acceder al espacio de trabajo y qué tareas puede realizar.">
       <div className="settings-fields-grid">
-        <Field label="Nombre y apellido" />
-        <Field label="Correo de la cuenta autorizada" type="email" />
-        <label className="settings-field"><span>Función en el estudio</span><select name="Función en el estudio" defaultValue=""><option value="" disabled>Seleccionar función</option><option>Profesional</option><option>Administración</option><option>Procuración</option><option>Asistencia jurídica</option></select></label>
-        <label className="settings-field"><span>Permiso inicial</span><select name="Permiso inicial" defaultValue=""><option value="" disabled>Seleccionar permiso</option><option>Consulta</option><option>Carga y edición</option><option>Administración</option></select></label>
+        <Field label="Nombre y apellido" required />
+        <Field label="Correo de la cuenta autorizada" type="email" required />
+        <label className="settings-field"><span>Función en el estudio</span><select name="Función en el estudio" defaultValue="" required><option value="" disabled>Seleccionar función</option><option>Profesional</option><option>Administración</option><option>Procuración</option><option>Asistencia jurídica</option></select></label>
+        <label className="settings-field"><span>Permiso inicial</span><select name="Permiso inicial" defaultValue="" required><option value="" disabled>Seleccionar permiso</option><option>Consulta</option><option>Carga y edición</option><option>Administración</option></select></label>
       </div>
-      <p className="settings-empty-note">No hay integrantes adicionales cargados.</p>
+      <p className="settings-empty-note">Completá los datos y elegí “Guardar y agregar” para registrar a la persona.</p>
     </Card>
-    <Card title="Accesos autorizados" description="Los permisos se asignarán a una persona identificada, no a un dispositivo compartido.">
-      <p className="settings-empty-note">Las autorizaciones se mostrarán aquí cuando se configure el acceso del equipo.</p>
+    <Card title="Personas asignadas" description="Integrantes registrados para este espacio de trabajo.">
+      {members.length === 0 ? <p className="settings-empty-note">Todavía no hay personas asignadas.</p> : <div className="settings-member-list">{members.map((member) => <article className="settings-member-row" key={member.id}>
+        <div><strong>{member.name}</strong><span>{member.email}</span></div>
+        <div className="settings-member-permissions"><span>{member.role}</span><span>{member.permission}</span></div>
+      </article>)}</div>}
+      <p className="settings-member-footnote">La lista se guarda en este navegador; la habilitación efectiva de acceso requiere integrar la asignación de permisos en Firebase.</p>
     </Card>
   </div>;
 }
@@ -180,7 +186,7 @@ function StorageSection() {
   </div>;
 }
 
-const content: Record<string, () => ReactNode> = {
+const content: Record<string, (props: { members: AuthorizedMember[] }) => ReactNode> = {
   identity: IdentitySection,
   professionals: ProfessionalSection,
   team: TeamSection,
@@ -194,12 +200,22 @@ const content: Record<string, () => ReactNode> = {
 export default function WorkspaceSettings() {
   const [active, setActive] = useState<string>("identity");
   const [saveMessage, setSaveMessage] = useState("");
+  const [members, setMembers] = useState<AuthorizedMember[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const ActiveSection = content[active];
   useEffect(() => {
     setSaveMessage("");
     const uid = getClientAuth().currentUser?.uid;
     if (!uid) return;
+    if (active === "team") {
+      try {
+        setMembers(JSON.parse(localStorage.getItem(teamMembersKey(uid)) ?? "[]") as AuthorizedMember[]);
+      } catch {
+        setMembers([]);
+      }
+      formRef.current?.reset();
+      return;
+    }
     const saved = localStorage.getItem(settingsKey(uid, active));
     if (!saved || !formRef.current) return;
     const values = JSON.parse(saved) as Record<string, string | boolean>;
@@ -221,6 +237,24 @@ export default function WorkspaceSettings() {
     const uid = getClientAuth().currentUser?.uid;
     if (!uid) {
       setSaveMessage("Iniciá sesión nuevamente para guardar los cambios.");
+      return;
+    }
+    if (active === "team") {
+      const formData = new FormData(form);
+      const name = String(formData.get("Nombre y apellido") ?? "").trim();
+      const email = String(formData.get("Correo de la cuenta autorizada") ?? "").trim().toLowerCase();
+      const role = String(formData.get("Función en el estudio") ?? "");
+      const permission = String(formData.get("Permiso inicial") ?? "");
+      if (!name || !email || !role || !permission) {
+        setSaveMessage("Completá nombre, correo, función y permiso.");
+        return;
+      }
+      const member: AuthorizedMember = { id: email, name, email, role, permission };
+      const nextMembers = [...members.filter((item) => item.email !== email), member];
+      localStorage.setItem(teamMembersKey(uid), JSON.stringify(nextMembers));
+      setMembers(nextMembers);
+      form.reset();
+      setSaveMessage("Persona guardada y agregada a la lista de este navegador.");
       return;
     }
     const values: Record<string, string | boolean> = {};
@@ -275,8 +309,8 @@ export default function WorkspaceSettings() {
       </button>)}
     </nav>
     <form className="settings-active-panel" key={active} ref={formRef} onSubmit={saveSettings}>
-      <ActiveSection />
-      <div className="settings-save-bar"><p role="status" aria-live="polite">{saveMessage}</p><button type="submit">Guardar cambios</button></div>
+      <ActiveSection members={members} />
+      <div className="settings-save-bar"><p role="status" aria-live="polite">{saveMessage}</p><button type="submit">{active === "team" ? "Guardar y agregar" : "Guardar cambios"}</button></div>
     </form>
   </>;
 }

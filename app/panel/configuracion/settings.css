@@ -10,6 +10,14 @@
 .settings-save-bar p { flex: 1; margin: 0; color: #17603a; font-size: 12px; }
 .settings-save-bar button { min-height: 40px; padding: 0 18px; border: 0; border-radius: 7px; color: #172311; background: #9bd31d; font: 600 12px Inter, sans-serif; cursor: pointer; }
 .settings-save-bar button:hover { background: #afe33b; }
+.settings-member-list { display: grid; gap: 9px; }
+.settings-member-row { display: grid; gap: 8px; padding: 12px; border: 1px solid #b4c8df; border-radius: 8px; background: #f8fafd; }
+.settings-member-row > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.settings-member-row strong { color: #173a60; font-size: 13px; }
+.settings-member-row span { color: #42566f; font-size: 11px; overflow-wrap: anywhere; }
+.settings-member-permissions { display: flex; flex-wrap: wrap; gap: 7px; }
+.settings-member-permissions span { padding: 4px 8px; border: 1px solid #c3d4e8; border-radius: 999px; background: #fff; }
+.settings-member-footnote { margin: 12px 0 0; color: #536a83; font-size: 10px; line-height: 1.5; }
 .settings-integration-heading,
 .settings-integration-details,
 .settings-integration-actions {
