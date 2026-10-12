@@ -17,7 +17,7 @@ const workflow = [
 export default function HomePage() {
   return <main className="public-site">
     <header className="public-header">
-      <Link href="/" className="brand-lockup" aria-label="Lima Legal, inicio"><span className="brand-symbol"><Image src="/images/brand/lima-legal-icon.png" alt="" width={48} height={48} priority /></span><span><strong>LIMA LEGAL</strong><small>GESTIÓN E INVESTIGACIÓN JURÍDICA</small></span></Link>
+      <Link href="/" className="brand-lockup brand-lockup-image" aria-label="Lima Legal, inicio"><Image src="/images/brand/lima-legal-title.png" alt="Lima Legal · Gestión e investigación jurídica" width={300} height={76} priority /></Link>
       <nav aria-label="Navegación principal"><a href="#plataforma">Plataforma</a><a href="#herramientas">Herramientas</a><a href="#tribunales">Tribunales</a><a href="#planes">Planes</a><a href="#como-funciona">Cómo funciona</a><a href="#nosotros">Nosotros</a></nav>
       <div className="header-actions"><Link href="/login" className="header-login">Ingresar</Link><a href="#planes" className="button button-lime button-small">Comenzar</a></div>
     </header>
