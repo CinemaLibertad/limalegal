@@ -114,7 +114,7 @@ export function NotificationsWorkspace() {
       type: "recordatorio", title: customTitle.trim(), description: customMessage.trim(), notes: "Recordatorio personal creado desde el Centro de Notificaciones.",
       startAt: new Date(customAt).toISOString(), endAt: null, timeZone: "America/Argentina/Buenos_Aires", allDay: false,
       isHighlighted: customPriority === "urgente", priority: customPriority, status: "pendiente",
-      caseIds: customCaseId ? [customCaseId] : [], clientIds: customClientId ? [customClientId] : [],
+      caseIds: customCaseId ? [customCaseId as ActivityInput["caseIds"][number]] : [], clientIds: customClientId ? [customClientId as ActivityInput["clientIds"][number]] : [],
       jurisdiction: "", branch: "", location: "", organization: "", meetingUrl: "", references: [], attachments: [],
       remindersMinutes: [0], recurrence: null, dateVerification: "no_aplica",
     };
