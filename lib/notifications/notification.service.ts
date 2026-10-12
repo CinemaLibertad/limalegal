@@ -7,7 +7,7 @@ const activityTypeLabel: Record<Activity["type"], string> = {
 };
 
 export function describeActivityNotification(
-  activity: Pick<Activity, "id" | "type" | "title" | "startAt" | "timeZone" | "priority" | "status">,
+  activity: Pick<Activity, "id" | "type" | "title" | "description" | "startAt" | "timeZone" | "priority" | "status">,
   kind: NotificationKind,
 ): { title: string; message: string; severity: NotificationSeverity; href: string; category: NotificationCategory } {
   const when = new Intl.DateTimeFormat("es-AR", {
