@@ -78,9 +78,8 @@ export function getCatalogApiUrl(): string | null {
 }
 
 export async function requestCatalog<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const baseUrl = getCatalogApiUrl();
-  if (!baseUrl) throw new Error("La API del Catálogo Judicial todavía no está configurada.");
-  const response = await fetch(`${baseUrl}/api/v1${path}`, {
+  if (!getCatalogApiUrl()) throw new Error("La API del Catálogo Judicial todavía no está configurada.");
+  const response = await fetch(`/api/catalogo${path}`, {
     method: "GET",
     headers: { Accept: "application/json" },
     signal,
